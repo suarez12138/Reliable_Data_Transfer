@@ -25,11 +25,14 @@ class RDTSocket(UnreliableSocket):
         self._send_to = None
         self._recv_from = None
         self.debug = debug
+        self.seq = 0
+        self.seq_ack = 0
 
         #############################################################################
         # TODO: ADD YOUR NECESSARY ATTRIBUTES HERE
         #############################################################################
         self.buffer_size = 2048
+        self.address = None
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -43,25 +46,33 @@ class RDTSocket(UnreliableSocket):
 
         This function should be blocking.
         """
-        conn, addr = RDTSocket(self._rate), None
+        # conn, addr = RDTSocket(self._rate), None
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
-        conn.set_recv_from(super().recvfrom)
-        print('receiving:')
-        data, addr = conn._recv_from(conn.buffer_size)
+        ##receive syn
+        self.set_recv_from(super().recvfrom)
+        data, addr = self._recv_from(self.buffer_size)
         syn_packet = Packet.from_bytes(data)
+        ##need to judge
+        self.set_seq_and_ack(syn_packet)
         print(syn_packet)
-        print('!')
-        conn.set_send_to(conn.sendto)
+
+        ##send syn,ack
+        self.set_send_to(self.sendto)
         if syn_packet.SYN == 1:
-            syn_ack_packet = Packet(SYN=1, ACK=1)
-            conn._send_to(syn_ack_packet.to_bytes(), addr)
+            syn_ack_packet = Packet(SYN=1, ACK=1,SEQ_ACK=self.seq_ack,SEQ=self.seq)
+            self._send_to(syn_ack_packet.to_bytes(), addr)
             print(syn_ack_packet)
 
-            data2, addr = conn._recv_from(conn.buffer_size)
-            ack_packet = Packet.from_bytes(data2)
+        #receive ack
+            data2, addr = self._recv_from(self.buffer_size)
+            ack_packet=Packet()
+            ack_packet = ack_packet.from_bytes(data2)
+            ##need to judge
+            self.set_seq_and_ack(ack_packet)
             print(ack_packet)
+            print(syn_ack_packet==ack_packet)
             if ack_packet.ACK == 1:
                 pass
             else:
@@ -70,33 +81,35 @@ class RDTSocket(UnreliableSocket):
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
-        return conn, addr
+        return self, addr
 
     def connect(self, address: (str, int)):
         """
         Connect to a remote socket at address.
         Corresponds to the process of establishing a connection on the client side.
         """
-        syn_packet = Packet(SYN=1, data=b'\x01')
+        syn_packet = Packet(SYN=1)
         self.set_send_to(self.sendto)
         # while True:
         self._send_to(syn_packet.to_bytes(), address)
-            # time.sleep(0.1)
+        # time.sleep(0.1)
         print(syn_packet)
 
         self.set_recv_from(super().recvfrom)
         data, addr = self._recv_from(self.buffer_size)
         syn_ack_packet = Packet.from_bytes(data)
+        self.set_seq_and_ack(syn_ack_packet)
         print(syn_ack_packet)
         # need to add time out situation
 
         if syn_ack_packet.SYN == 1 and syn_ack_packet == 1:
-            ack_packet = Packet(ACK=1, SEQ=1)
-            self._send_to(ack_packet, address)
+            ack_packet = Packet(ACK=1, SEQ=self.seq,SEQ_ACK=self.seq_ack)
+            self._send_to(ack_packet.to_bytes(), address)
+            self.set_address(address)
             print(ack_packet)
         else:
             pass
-            # the packet is wrong
+            # when the packet is wrong
 
     def recv(self, bufsize: int) -> bytes:
         """
@@ -108,12 +121,14 @@ class RDTSocket(UnreliableSocket):
         In other words, if someone else sends data to you from another address,
         it MUST NOT affect the data returned by this function.
         """
-        data = None
-        assert self._recv_from, "Connection not established yet. Use recvfrom instead."
+        # data = None
+        # assert self._recv_from, "Connection not established yet. Use recvfrom instead."
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
-
+        packet=Packet.from_bytes(self._recv_from(bufsize)[0])
+        data = packet.PAYLOAD
+        self.set_seq_and_ack(packet)
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -128,7 +143,9 @@ class RDTSocket(UnreliableSocket):
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
-        raise NotImplementedError()
+
+        self._send_to(Packet(SEQ=self.seq,ACK=self.ack,data=bytes).to_bytes(), self.address)
+        #need to be modified
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -152,6 +169,16 @@ class RDTSocket(UnreliableSocket):
 
     def set_recv_from(self, recv_from):
         self._recv_from = recv_from
+
+    def set_address(self, address):
+        self.address = address
+
+    def set_buffer_size(self, bufsize):
+        self.buffer_size = bufsize
+
+    def set_seq_and_ack(self, packet: Packet):
+        self.seq = packet.SEQ_ACK
+        self.seq_ack += packet.LEN
 
 
 """

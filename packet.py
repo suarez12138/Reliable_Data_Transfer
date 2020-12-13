@@ -96,7 +96,7 @@ class Packet:
         res += "SEQ_ACK={}, ".format(self.SEQ_ACK)
 
         if self.LEN != 0:
-            res += "Len={}, ".format(self.LEN)
+            res += "LEN={}, ".format(self.LEN)
             res += "] "
             res += str(self.PAYLOAD)
         else:
