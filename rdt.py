@@ -119,13 +119,6 @@ class RDTSocket(UnreliableSocket):
     def set_recv_from(self, recv_from):
         self._recv_from = recv_from
 
-    def checksum(self, payload):
-        sum = 0
-        for byte in payload:
-            sum += byte
-        sum = -(sum % 256)
-        return sum & 0xff
-
 
 """
 You can define additional functions and classes to do thing such as packing/unpacking packets, or threading.
@@ -167,3 +160,19 @@ Ranges:
 
 Size of sender's window     16
 """
+
+
+def checksum(payload):
+    sum = 0
+    for byte in payload:
+        sum += byte
+    sum = -(sum % 256)
+    return sum & 0xff
+
+
+if __name__ == '__main__':
+    import struct
+
+    payload = 'akjdfakdfjsdaf'
+    o = checksum(bytes(payload.encode("UTF-8")))
+    print(o)
