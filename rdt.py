@@ -119,16 +119,51 @@ class RDTSocket(UnreliableSocket):
     def set_recv_from(self, recv_from):
         self._recv_from = recv_from
 
+    def checksum(self, payload):
+        sum = 0
+        for byte in payload:
+            sum += byte
+        sum = -(sum % 256)
+        return sum & 0xff
+
 
 """
 You can define additional functions and classes to do thing such as packing/unpacking packets, or threading.
 
 """
 
+"""
+Reliable Data Transfer Segment
 
-def checksum(self, payload):
-        sum = 0
-        for byte in payload:
-            sum += byte
-        sum = -(sum % 256)
-        return sum & 0xff
+Segment Format:
+
+|0 1 2 3 4 5 6 7 8|0 1 2 3 4 5 6 7 8|0 1 2 3 4 5 6 7 8|0 1 2 3 4 5 6 7 8| 
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|           (NO USE)          |S|F|A|              CHECKSUM             |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                              SEQ                                      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                            SEQ ACK                                    |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                              LEN                                      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                                                                       |
+/                            PAYLOAD                                    /
+/                                                                       /
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+
+Flags:
+ - S-SYN                      Synchronize
+ - F-FIN                      Finish
+ - A-ACK                      Acknowledge
+
+Ranges:
+ - Payload Length           0 - 2^32  (append zeros to the end if length < 1440)
+ - Sequence Number          0 - 2^32
+ - Acknowledgement Number   0 - 2^32
+ - CHECKSUM                 0 - 2^16
+
+
+Size of sender's window     16
+"""
