@@ -1,6 +1,7 @@
 from USocket import UnreliableSocket
 import threading
 import time
+from packet import Packet
 
 
 class RDTSocket(UnreliableSocket):
@@ -24,10 +25,11 @@ class RDTSocket(UnreliableSocket):
         self._send_to = None
         self._recv_from = None
         self.debug = debug
+
         #############################################################################
         # TODO: ADD YOUR NECESSARY ATTRIBUTES HERE
         #############################################################################
-
+        self.buffer_size = 2048
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -45,7 +47,26 @@ class RDTSocket(UnreliableSocket):
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
+        conn.set_recv_from(super().recvfrom)
+        print('receiving:')
+        data, addr = conn._recv_from(conn.buffer_size)
+        syn_packet = Packet.from_bytes(data)
+        print(syn_packet)
+        print('!')
+        conn.set_send_to(conn.sendto)
+        if syn_packet.SYN == 1:
+            syn_ack_packet = Packet(SYN=1, ACK=1)
+            conn._send_to(syn_ack_packet.to_bytes(), addr)
+            print(syn_ack_packet)
 
+            data2, addr = conn._recv_from(conn.buffer_size)
+            ack_packet = Packet.from_bytes(data2)
+            print(ack_packet)
+            if ack_packet.ACK == 1:
+                pass
+            else:
+                pass
+            # need to be modified
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -56,13 +77,26 @@ class RDTSocket(UnreliableSocket):
         Connect to a remote socket at address.
         Corresponds to the process of establishing a connection on the client side.
         """
-        #############################################################################
-        # TODO: YOUR CODE HERE                                                      #
-        #############################################################################
-        raise NotImplementedError()
-        #############################################################################
-        #                             END OF YOUR CODE                              #
-        #############################################################################
+        syn_packet = Packet(SYN=1, data=b'\x01')
+        self.set_send_to(self.sendto)
+        # while True:
+        self._send_to(syn_packet.to_bytes(), address)
+            # time.sleep(0.1)
+        print(syn_packet)
+
+        self.set_recv_from(super().recvfrom)
+        data, addr = self._recv_from(self.buffer_size)
+        syn_ack_packet = Packet.from_bytes(data)
+        print(syn_ack_packet)
+        # need to add time out situation
+
+        if syn_ack_packet.SYN == 1 and syn_ack_packet == 1:
+            ack_packet = Packet(ACK=1, SEQ=1)
+            self._send_to(ack_packet, address)
+            print(ack_packet)
+        else:
+            pass
+            # the packet is wrong
 
     def recv(self, bufsize: int) -> bytes:
         """
