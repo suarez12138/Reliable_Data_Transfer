@@ -116,6 +116,7 @@ class RDTSocket(UnreliableSocket):
             pass
             # when the packet is wrong
 
+#return payload(in byte)
     def recv(self, bufsize: int) -> bytes:
         """
         Receive data from the socket.
@@ -149,7 +150,7 @@ class RDTSocket(UnreliableSocket):
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
-        packet=Packet(SEQ=self.seq,SEQ_ACK=self.seq_ack,data=bytes)
+        packet=Packet(ACK=1,SEQ=self.seq,SEQ_ACK=self.seq_ack,data=bytes)
         print(packet)
         self._send_to(packet.to_bytes(),self.address)
         #need to be modified

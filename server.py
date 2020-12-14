@@ -9,7 +9,7 @@ server.bind((SERVER_ADDR, SERVER_PORT))
 while True:
     conn, client = server.accept()
     while True:
-        data,addr = conn.recvfrom(2048)
+        data = conn.recv(2048)
         if not data:
             break
         conn.send(data)
