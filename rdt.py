@@ -115,16 +115,28 @@ class RDTSocket(UnreliableSocket):
         """
         # data = None
         # assert self._recv_from, "Connection not established yet. Use recvfrom instead."
-        #############################################################################
-        # TODO: YOUR CODE HERE                                                      #
-        #############################################################################
+
         packet = Packet.from_bytes(self._recv_from(bufsize)[0])
         print(packet)
         data = packet.PAYLOAD
         self.set_seq_and_ack(packet)
-        #############################################################################
-        #                             END OF YOUR CODE                              #
-        #############################################################################
+        # When closing
+        while packet.FIN:
+            packet = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
+            print(packet)
+            self._send_to(packet.to_bytes(), self.address)
+            packet = Packet(ACK=1, FIN=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
+            print(packet)
+            self._send_to(packet.to_bytes(), self.address)
+            re = self._recv_from(bufsize)
+            packet = Packet.from_bytes(re[0])
+            print(packet)
+            data = packet.PAYLOAD
+            self.set_seq_and_ack(packet)
+            if packet.ACK:
+                print('关闭 Port:' + str(re[1][1]) + ' 的连接')
+                break
+
         return data
 
     def send(self, bytes: bytes):
@@ -133,16 +145,10 @@ class RDTSocket(UnreliableSocket):
         The socket must be connected to a remote socket, i.e. self._send_to must not be none.
         """
         # assert self._send_to, "Connection not established yet. Use sendto instead."
-        #############################################################################
-        # TODO: YOUR CODE HERE                                                      #
-        #############################################################################
         packet = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack, data=bytes)
         print(packet)
         self._send_to(packet.to_bytes(), self.address)
         # need to be modified
-        #############################################################################
-        #                             END OF YOUR CODE                              #
-        #############################################################################
 
     def close(self):
         """
@@ -179,7 +185,6 @@ class RDTSocket(UnreliableSocket):
                 break
             else:
                 continue
-
 
         super().close()
 
