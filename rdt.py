@@ -53,6 +53,7 @@ class RDTSocket(UnreliableSocket):
         ##receive syn
         self.set_recv_from(super().recvfrom)
         data, addr = self._recv_from(self.buffer_size)
+        self.set_address(addr)
         syn_packet = Packet.from_bytes(data)
         ##need to judge
         self.set_seq_and_ack(syn_packet)
@@ -61,18 +62,18 @@ class RDTSocket(UnreliableSocket):
         ##send syn,ack
         self.set_send_to(self.sendto)
         if syn_packet.SYN == 1:
+            self.seq_ack+=1
             syn_ack_packet = Packet(SYN=1, ACK=1,SEQ_ACK=self.seq_ack,SEQ=self.seq)
             self._send_to(syn_ack_packet.to_bytes(), addr)
             print(syn_ack_packet)
 
         #receive ack
-            data2, addr = self._recv_from(self.buffer_size)
+            data2, addr2 = self._recv_from(self.buffer_size)
             ack_packet=Packet()
             ack_packet = ack_packet.from_bytes(data2)
             ##need to judge
             self.set_seq_and_ack(ack_packet)
             print(ack_packet)
-            print(syn_ack_packet==ack_packet)
             if ack_packet.ACK == 1:
                 pass
             else:
@@ -104,7 +105,7 @@ class RDTSocket(UnreliableSocket):
 
         if syn_ack_packet.SYN == 1 and syn_ack_packet == 1:
             ack_packet = Packet(ACK=1, SEQ=self.seq,SEQ_ACK=self.seq_ack)
-            self._send_to(ack_packet.to_bytes(), address)
+            self._send_to(ack_packet.to_bytes(), self.address)
             self.set_address(address)
             print(ack_packet)
         else:
@@ -139,12 +140,12 @@ class RDTSocket(UnreliableSocket):
         Send data to the socket.
         The socket must be connected to a remote socket, i.e. self._send_to must not be none.
         """
-        assert self._send_to, "Connection not established yet. Use sendto instead."
+        # assert self._send_to, "Connection not established yet. Use sendto instead."
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
-
-        self._send_to(Packet(SEQ=self.seq,ACK=self.ack,data=bytes).to_bytes(), self.address)
+        packet=Packet(SEQ=self.seq,SEQ_ACK=self.seq_ack,data=bytes[0])
+        self._send_to(packet.to_bytes(), bytes[1])
         #need to be modified
         #############################################################################
         #                             END OF YOUR CODE                              #

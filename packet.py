@@ -1,5 +1,5 @@
 class Packet:
-    def __init__(self, SYN=False, FIN=False, ACK=False, SEQ=0, SEQ_ACK=0, data=b'' ):
+    def __init__(self, SYN=False, FIN=False, ACK=False, SEQ=0, SEQ_ACK=0, data=b''):
         self.SYN = SYN
         self.ACK = ACK
         self.FIN = FIN
@@ -103,7 +103,6 @@ class Packet:
             res += "] "
 
         return res
-
 
 # if __name__ == "__main__":
 #     # test Packet
