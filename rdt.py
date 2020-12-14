@@ -89,6 +89,7 @@ class RDTSocket(UnreliableSocket):
         Connect to a remote socket at address.
         Corresponds to the process of establishing a connection on the client side.
         """
+        ##send syn
         syn_packet = Packet(SYN=1)
         self.set_send_to(self.sendto)
         # while True:
@@ -96,18 +97,21 @@ class RDTSocket(UnreliableSocket):
         # time.sleep(0.1)
         print(syn_packet)
 
+        #receive syn ack
         self.set_recv_from(super().recvfrom)
         data, addr = self._recv_from(self.buffer_size)
         syn_ack_packet = Packet.from_bytes(data)
         self.set_seq_and_ack(syn_ack_packet)
+        self.set_address(address)
         print(syn_ack_packet)
         # need to add time out situation
 
-        if syn_ack_packet.SYN == 1 and syn_ack_packet == 1:
+       #send ack
+        if syn_ack_packet.SYN == 1 and syn_ack_packet.ACK == 1:
+            self.seq_ack+=1
             ack_packet = Packet(ACK=1, SEQ=self.seq,SEQ_ACK=self.seq_ack)
-            self._send_to(ack_packet.to_bytes(), self.address)
-            self.set_address(address)
             print(ack_packet)
+            self._send_to(ack_packet.to_bytes(), address)
         else:
             pass
             # when the packet is wrong
@@ -144,8 +148,8 @@ class RDTSocket(UnreliableSocket):
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
-        packet=Packet(SEQ=self.seq,SEQ_ACK=self.seq_ack,data=bytes[0])
-        self._send_to(packet.to_bytes(), bytes[1])
+        packet=Packet(SEQ=self.seq,SEQ_ACK=self.seq_ack,data=bytes)
+        self._send_to(packet.to_bytes(), self.address)
         #need to be modified
         #############################################################################
         #                             END OF YOUR CODE                              #

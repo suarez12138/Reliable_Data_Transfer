@@ -1,7 +1,7 @@
 from rdt import RDTSocket
 
 SERVER_ADDR = '127.0.0.1'
-SERVER_PORT = 12345
+SERVER_PORT = 6666
 MESSAGE :bytes= b''
 BUFFER_SIZE = 2048
 
