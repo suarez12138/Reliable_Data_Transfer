@@ -42,29 +42,29 @@ class RDTSocket(UnreliableSocket):
         # conn, addr = RDTSocket(self._rate), None
         ##receive syn
         self.set_recv_from(super().recvfrom)
+        self.set_send_to(self.sendto)
+
         data, addr = self._recv_from(self.buffer_size)
         self.set_address(addr)
         syn_packet = Packet.from_bytes(data)
-        ##need to judge
-        self.set_seq_and_ack(syn_packet)
-        print(syn_packet)
+        print('Receive:',syn_packet)
 
-        ##send syn,ack
-        self.set_send_to(self.sendto)
-        if syn_packet.SYN == 1:
+        if syn_packet.test_the_packet(SYN=1):
+            self.set_seq_and_ack(syn_packet)
+            ##send syn,ack
             syn_ack_packet = Packet(SYN=1, ACK=1, SEQ_ACK=self.seq_ack, SEQ=self.seq)
             self._send_to(syn_ack_packet.to_bytes(), addr)
-            print(syn_ack_packet)
+            print('Send:',syn_ack_packet)
 
             # receive ack
             data2, addr2 = self._recv_from(self.buffer_size)
-            ack_packet = Packet()
-            ack_packet = ack_packet.from_bytes(data2)
+            ack_packet = Packet().from_bytes(data2)
             ##need to judge
-            self.set_seq_and_ack(ack_packet)
-            print(ack_packet)
-            if ack_packet.ACK == 1:
-                pass
+
+            print('Receive:',ack_packet)
+            if ack_packet.test_the_packet(ACK=1):
+                self.set_seq_and_ack(ack_packet)
+                print('开启 Port:' + str(addr2[1]) + ' 的连接')
             else:
                 pass
             # need to be modified
@@ -82,21 +82,22 @@ class RDTSocket(UnreliableSocket):
         # while True:
         self._send_to(syn_packet.to_bytes(), address)
         # time.sleep(0.1)
-        print(syn_packet)
+        print('Send:',syn_packet)
 
         # receive syn ack
         self.set_recv_from(super().recvfrom)
         data, addr = self._recv_from(self.buffer_size)
         syn_ack_packet = Packet.from_bytes(data)
-        self.set_seq_and_ack(syn_ack_packet)
+
         self.set_address(address)
-        print(syn_ack_packet)
+        print('Receive:',syn_ack_packet)
         # need to add time out situation
 
-        # send ack
-        if syn_ack_packet.SYN == 1 and syn_ack_packet.ACK == 1:
+        if syn_packet.test_the_packet(SYN=1, ACK=1):
+            self.set_seq_and_ack(syn_ack_packet)
+            # send ack
             ack_packet = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
-            print(ack_packet)
+            print('Send:',ack_packet)
             self._send_to(ack_packet.to_bytes(), address)
         else:
             pass
@@ -115,27 +116,33 @@ class RDTSocket(UnreliableSocket):
         """
         # data = None
         # assert self._recv_from, "Connection not established yet. Use recvfrom instead."
-
+        #receive fin
         packet = Packet.from_bytes(self._recv_from(bufsize)[0])
-        print(packet)
+        print('Receive:',packet)
         data = packet.PAYLOAD
-        self.set_seq_and_ack(packet)
+
         # When closing
-        while packet.FIN:
-            packet = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
-            print(packet)
-            self._send_to(packet.to_bytes(), self.address)
-            packet = Packet(ACK=1, FIN=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
-            print(packet)
-            self._send_to(packet.to_bytes(), self.address)
-            re = self._recv_from(bufsize)
-            packet = Packet.from_bytes(re[0])
-            print(packet)
-            data = packet.PAYLOAD
+        if packet.test_the_packet():
             self.set_seq_and_ack(packet)
-            if packet.ACK:
-                print('关闭 Port:' + str(re[1][1]) + ' 的连接')
-                break
+            if packet.test_the_packet(FIN=1,ACK=1):
+                #send ack
+                ack_packet = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
+                print('Send:',ack_packet)
+                self._send_to(ack_packet.to_bytes(), self.address)
+                # send fin,ack
+                fin_ack_packet = Packet(ACK=1, FIN=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
+                print('Send:',fin_ack_packet)
+                self._send_to(fin_ack_packet.to_bytes(), self.address)
+                #receive ack
+                re = self._recv_from(bufsize)
+                packet = Packet.from_bytes(re[0])
+                print('Receive:',packet)
+                data = packet.PAYLOAD
+                if packet.test_the_packet(ACK=1):
+                    self.set_seq_and_ack(packet)
+                    print('关闭 Port:' + str(re[1][1]) + ' 的连接')
+                else:
+                    pass
 
         return data
 
@@ -146,7 +153,7 @@ class RDTSocket(UnreliableSocket):
         """
         # assert self._send_to, "Connection not established yet. Use sendto instead."
         packet = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack, data=bytes)
-        print(packet)
+        print('Send:',packet)
         self._send_to(packet.to_bytes(), self.address)
         # need to be modified
 
@@ -157,27 +164,27 @@ class RDTSocket(UnreliableSocket):
         """
 
         # send fin
-        fin_packet = Packet(FIN=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
-        print(fin_packet)
+        fin_packet = Packet(ACK=1, FIN=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
+        print('Send:',fin_packet)
         self._send_to(fin_packet.to_bytes(), self.address)
 
         # receive ack
         while True:
             ack_packet1 = Packet.from_bytes(self._recv_from(self.buffer_size)[0])
-            print(ack_packet1)
+            print('Receive:',ack_packet1)
             # judge the packet
-            if ack_packet1.ACK == 1:
+            if ack_packet1.test_the_packet(ACK=1):
                 self.set_seq_and_ack(ack_packet1)
                 # receive fin
                 while True:
                     fin_packet2 = Packet.from_bytes(self._recv_from(self.buffer_size)[0])
-                    print(fin_packet2)
+                    print('Receive:',fin_packet2)
                     # judge the packet
-                    if fin_packet2.FIN == 1:
+                    if fin_packet2.test_the_packet(FIN=1):
                         self.set_seq_and_ack(fin_packet2)
                         # send ack
                         ack_packet2 = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
-                        print(ack_packet2)
+                        print('Send:',ack_packet2)
                         self._send_to(ack_packet2.to_bytes(), self.address)
                         break
                     else:

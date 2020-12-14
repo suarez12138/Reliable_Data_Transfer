@@ -67,8 +67,23 @@ class Packet:
         ###########################################################################3需要修改
         # assert packet.LEN == len(packet.PAYLOAD)
         # assert Packet.checksum(packet.to_bytes()) == 0
-
         return packet
+
+    def test_the_packet(self, SYN=0, FIN=0, ACK=0):
+        # if not SYN == 0:
+        #     if not self.SYN == 1:
+        #         return False
+        # if not FIN == 0:
+        #     if not self.FIN == 1:
+        #         return False
+        # if not ACK == 0:
+        #     if not self.ACK == 1:
+        #         return False
+        if not self.LEN == len(self.PAYLOAD):
+            return False
+        if not self.checksum(self.to_bytes()) == 0:
+            return False
+        return True
 
     @staticmethod
     def checksum(data: bytes):
