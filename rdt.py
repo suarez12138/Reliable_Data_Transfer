@@ -132,6 +132,7 @@ class RDTSocket(UnreliableSocket):
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
         packet=Packet.from_bytes(self._recv_from(bufsize)[0])
+        print(packet)
         data = packet.PAYLOAD
         self.set_seq_and_ack(packet)
         #############################################################################
@@ -149,7 +150,8 @@ class RDTSocket(UnreliableSocket):
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
         packet=Packet(SEQ=self.seq,SEQ_ACK=self.seq_ack,data=bytes)
-        self._send_to(packet.to_bytes(), self.address)
+        print(packet)
+        self._send_to(packet.to_bytes(),self.address)
         #need to be modified
         #############################################################################
         #                             END OF YOUR CODE                              #
@@ -239,6 +241,6 @@ def checksum(payload):
 if __name__ == '__main__':
     import struct
 
-    payload = 'akjdfakdfjsdaf'
-    o = checksum(bytes(payload.encode("UTF-8")))
-    print(o)
+    # payload = 'akjdfakdfjsdaf'
+    # o = checksum(bytes(payload.encode("UTF-8")))
+    # print(o)
