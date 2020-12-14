@@ -27,15 +27,8 @@ class RDTSocket(UnreliableSocket):
         self.debug = debug
         self.seq = 0
         self.seq_ack = 0
-
-        #############################################################################
-        # TODO: ADD YOUR NECESSARY ATTRIBUTES HERE
-        #############################################################################
         self.buffer_size = 2048
         self.address = None
-        #############################################################################
-        #                             END OF YOUR CODE                              #
-        #############################################################################
 
     def accept(self) -> ('RDTSocket', (str, int)):
         """
@@ -47,9 +40,6 @@ class RDTSocket(UnreliableSocket):
         This function should be blocking.
         """
         # conn, addr = RDTSocket(self._rate), None
-        #############################################################################
-        # TODO: YOUR CODE HERE                                                      #
-        #############################################################################
         ##receive syn
         self.set_recv_from(super().recvfrom)
         data, addr = self._recv_from(self.buffer_size)
@@ -62,14 +52,13 @@ class RDTSocket(UnreliableSocket):
         ##send syn,ack
         self.set_send_to(self.sendto)
         if syn_packet.SYN == 1:
-            self.seq_ack+=1
-            syn_ack_packet = Packet(SYN=1, ACK=1,SEQ_ACK=self.seq_ack,SEQ=self.seq)
+            syn_ack_packet = Packet(SYN=1, ACK=1, SEQ_ACK=self.seq_ack, SEQ=self.seq)
             self._send_to(syn_ack_packet.to_bytes(), addr)
             print(syn_ack_packet)
 
-        #receive ack
+            # receive ack
             data2, addr2 = self._recv_from(self.buffer_size)
-            ack_packet=Packet()
+            ack_packet = Packet()
             ack_packet = ack_packet.from_bytes(data2)
             ##need to judge
             self.set_seq_and_ack(ack_packet)
@@ -79,9 +68,7 @@ class RDTSocket(UnreliableSocket):
             else:
                 pass
             # need to be modified
-        #############################################################################
-        #                             END OF YOUR CODE                              #
-        #############################################################################
+
         return self, addr
 
     def connect(self, address: (str, int)):
@@ -97,7 +84,7 @@ class RDTSocket(UnreliableSocket):
         # time.sleep(0.1)
         print(syn_packet)
 
-        #receive syn ack
+        # receive syn ack
         self.set_recv_from(super().recvfrom)
         data, addr = self._recv_from(self.buffer_size)
         syn_ack_packet = Packet.from_bytes(data)
@@ -106,17 +93,16 @@ class RDTSocket(UnreliableSocket):
         print(syn_ack_packet)
         # need to add time out situation
 
-       #send ack
+        # send ack
         if syn_ack_packet.SYN == 1 and syn_ack_packet.ACK == 1:
-            self.seq_ack+=1
-            ack_packet = Packet(ACK=1, SEQ=self.seq,SEQ_ACK=self.seq_ack)
+            ack_packet = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
             print(ack_packet)
             self._send_to(ack_packet.to_bytes(), address)
         else:
             pass
             # when the packet is wrong
 
-#return payload(in byte)
+    # return payload(in byte)
     def recv(self, bufsize: int) -> bytes:
         """
         Receive data from the socket.
@@ -132,7 +118,7 @@ class RDTSocket(UnreliableSocket):
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
-        packet=Packet.from_bytes(self._recv_from(bufsize)[0])
+        packet = Packet.from_bytes(self._recv_from(bufsize)[0])
         print(packet)
         data = packet.PAYLOAD
         self.set_seq_and_ack(packet)
@@ -150,10 +136,10 @@ class RDTSocket(UnreliableSocket):
         #############################################################################
         # TODO: YOUR CODE HERE                                                      #
         #############################################################################
-        packet=Packet(ACK=1,SEQ=self.seq,SEQ_ACK=self.seq_ack,data=bytes)
+        packet = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack, data=bytes)
         print(packet)
-        self._send_to(packet.to_bytes(),self.address)
-        #need to be modified
+        self._send_to(packet.to_bytes(), self.address)
+        # need to be modified
         #############################################################################
         #                             END OF YOUR CODE                              #
         #############################################################################
@@ -163,13 +149,38 @@ class RDTSocket(UnreliableSocket):
         Finish the connection and release resources. For simplicity, assume that
         after a socket is closed, neither futher sends nor receives are allowed.
         """
-        #############################################################################
-        # TODO: YOUR CODE HERE                                                      #
-        #############################################################################
 
-        #############################################################################
-        #                             END OF YOUR CODE                              #
-        #############################################################################
+        # send fin
+        fin_packet = Packet(FIN=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
+        print(fin_packet)
+        self._send_to(fin_packet.to_bytes(), self.address)
+
+        # receive ack
+        while True:
+            ack_packet1 = Packet.from_bytes(self._recv_from(self.buffer_size)[0])
+            print(ack_packet1)
+            # judge the packet
+            if ack_packet1.ACK == 1:
+                self.set_seq_and_ack(ack_packet1)
+                # receive fin
+                while True:
+                    fin_packet2 = Packet.from_bytes(self._recv_from(self.buffer_size)[0])
+                    print(fin_packet2)
+                    # judge the packet
+                    if fin_packet2.FIN == 1:
+                        self.set_seq_and_ack(fin_packet2)
+                        # send ack
+                        ack_packet2 = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
+                        print(ack_packet2)
+                        self._send_to(ack_packet2.to_bytes(), self.address)
+                        break
+                    else:
+                        continue
+                break
+            else:
+                continue
+
+
         super().close()
 
     def set_send_to(self, send_to):
@@ -186,7 +197,7 @@ class RDTSocket(UnreliableSocket):
 
     def set_seq_and_ack(self, packet: Packet):
         self.seq = packet.SEQ_ACK
-        self.seq_ack += packet.LEN
+        self.seq_ack += packet.LEN + packet.FIN + packet.SYN
 
 
 """
