@@ -113,7 +113,7 @@ class Packet:
         output += "LEN={} ".format(self.LEN)
         if self.LEN != 0:
             output += "\n "
-            output += str(self.PAYLOAD)
+            # output += str(self.PAYLOAD)
 
         return output
 
