@@ -300,3 +300,15 @@ def checksum(payload):
         sum += byte
     sum = -(sum % 256)
     return sum & 0xff
+
+
+class Queue:
+
+    def __init__(self):
+        self.item = []
+
+    def push(self, value):
+        self.item.append(value)
+
+    def pop(self):
+        self.item.pop(0)
