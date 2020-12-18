@@ -205,13 +205,15 @@ class RDTSocket(UnreliableSocket):
             if packet.test_the_packet(FIN=1):
                 flag_fin = 1
                 self.set_number_receive(packet)
-                packet_send = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
-                self.transmission(packet_send, self.address)
-                #                                                因为 ACK = 1
-                packet_send = Packet(FIN=1, ACK=1, SEQ=self.seq + 1, SEQ_ACK=self.seq_ack)
-                self.transmission(packet_send, self.address)
-            elif flag_fin == 1 and packet.test_the_packet(ACK=1):
-                return data
+            elif flag_fin == 1:
+                if packet.test_the_packet(ACK=1):
+                    return data
+                else:
+                    packet_send = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
+                    self.transmission(packet_send, self.address)
+                    #                                                因为 ACK = 1
+                    packet_send = Packet(FIN=1, ACK=1, SEQ=self.seq + 1, SEQ_ACK=self.seq_ack)
+                    self.transmission(packet_send, self.address)
             else:
                 #           7. 如果来的seq = 我的ack： 返回ack = seq+len, data
                 if packet.SEQ == self.seq_ack:
