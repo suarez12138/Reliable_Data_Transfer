@@ -305,10 +305,10 @@ def checksum(payload):
 class Queue:
 
     def __init__(self):
-        self.item = []
+        self.items = []
 
     def push(self, value):
-        self.item.append(value)
+        self.items.append(value)
 
     def pop(self):
-        self.item.pop(0)
+        self.items.pop(0)
