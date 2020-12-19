@@ -240,13 +240,17 @@ class RDTSocket(UnreliableSocket):
         flag = 1
         while flag:
             flag = 0
-            for packet in self.receive_buffer:
+            i = 0
+            while i < len(self.receive_buffer):
+                packet = self.receive_buffer[i]
                 if self.seq_ack == packet.SEQ:  # 找到了一个可以接上的包，一系列操作，继续循环
                     self.seq_ack += packet.LEN
                     data += packet.PAYLOAD
                     flag = 1
                 if packet.SEQ <= self.seq_ack:  # 过时的包， 删掉
                     self.receive_buffer.remove(packet)
+                    i -= 1
+                i += 1
         return data, self.seq_ack
 
     # 122822 完结
