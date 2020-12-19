@@ -24,8 +24,8 @@ class RDTSocket(UnreliableSocket):
     def __init__(self, rate=None, debug=True):
         super().__init__(rate=rate)
         self._rate = rate
-        self._send_to = None
-        self._recv_from = None
+        # self._send_to = None
+        # self._recv_from = None
         self.debug = debug
         self.seq = 0
         self.seq_ack = 0
@@ -44,22 +44,24 @@ class RDTSocket(UnreliableSocket):
         """
         conn, addr = RDTSocket(self._rate), None
         ##receive syn
-        conn.set_recv_from(super().recvfrom)
-        conn.set_send_to(self.sendto)
+        # conn.set_recv_from(super().recvfrom)
+        # conn.set_send_to(self.sendto)
+        # conn.set_send_to(conn.sendto)
         conn.set_identity(0)
-
-        data, addr = conn._recv_from(conn.buffer_size)
-        conn.set_address(addr)
-        syn_packet = conn.reception(data)
+        # use port 6666 to receive first SYN
+        data, addr = self.recvfrom(conn.buffer_size)
+        syn_packet = self.reception(data)
 
         if syn_packet.test_the_packet(SYN=1):
             conn.set_number_receive(syn_packet)
             ##send syn,ack
             syn_ack_packet = Packet(SYN=1, ACK=1, SEQ_ACK=conn.seq_ack, SEQ=conn.seq)
+            # use conn to transfer syn_ack_packet and it will be allot a new port, then always use conn but not server
+            # server just need to receive the first SYN for each client
             conn.transmission(syn_ack_packet, addr)
 
             # receive ack
-            data2, addr2 = conn._recv_from(conn.buffer_size)
+            data2, addr2 = conn.recvfrom(conn.buffer_size)
             ack_packet = conn.reception(data2)
             ##need to judge
             if ack_packet.test_the_packet(ACK=1):
@@ -69,6 +71,7 @@ class RDTSocket(UnreliableSocket):
             else:
                 pass
             # need to be modified
+        conn.set_address(addr)
 
         return conn, addr
 
@@ -77,10 +80,9 @@ class RDTSocket(UnreliableSocket):
         Connect to a remote socket at address.
         Corresponds to the process of establishing a connection on the client side.
         """
-        self.set_send_to(self.sendto)
-        self.set_recv_from(super().recvfrom)
+        # self.set_send_to(self.sendto)
+        # self.set_recv_from(super().recvfrom)
         self.set_identity(1)
-        self.set_address(address)
 
         ##send syn
         syn_packet = Packet(SYN=1)
@@ -88,7 +90,7 @@ class RDTSocket(UnreliableSocket):
         self.transmission(syn_packet, address)
 
         # receive syn ack
-        data, addr = self._recv_from(self.buffer_size)
+        data, addr = self.recvfrom(self.buffer_size)
         syn_ack_packet = self.reception(data)
         # need to add time out situation
 
@@ -96,10 +98,13 @@ class RDTSocket(UnreliableSocket):
             self.set_number_receive(syn_ack_packet)
             # send ack
             ack_packet = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
-            self.transmission(ack_packet, self.address)
+            self.transmission(ack_packet, addr)
         else:
             pass
             # when the packet is wrong
+
+        # set address after three times handshake
+        self.set_address(addr)
 
     # return payload(in byte)
     def recv(self, bufsize: int) -> bytes:
@@ -116,7 +121,7 @@ class RDTSocket(UnreliableSocket):
         # assert self._recv_from, "Connection not established yet. Use recvfrom instead."
         # receive fin
         while True:
-            packet = self.reception(self._recv_from(bufsize)[0])
+            packet = self.reception(self.recvfrom(bufsize)[0])
             data = packet.PAYLOAD
 
             # When closing
@@ -145,7 +150,7 @@ class RDTSocket(UnreliableSocket):
                 packet = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack, data=message_list[i])
                 self.set_number_send(packet)
                 self.transmission(packet, self.address)
-                ack_packet = self.reception(self._recv_from(self.buffer_size)[0])
+                ack_packet = self.reception(self.recvfrom(self.buffer_size)[0])
                 if ack_packet.test_the_packet(ACK=1):
                     self.set_number_receive(ack_packet)
                     break
@@ -167,13 +172,13 @@ class RDTSocket(UnreliableSocket):
 
             # receive ack
             while True:
-                ack_packet1 = self.reception(self._recv_from(self.buffer_size)[0])
+                ack_packet1 = self.reception(self.recvfrom(self.buffer_size)[0])
                 # judge the packet
                 if ack_packet1.test_the_packet(ACK=1):
                     self.set_number_receive(ack_packet1)
                     # receive fin
                     while True:
-                        fin_packet2 = self.reception(self._recv_from(self.buffer_size)[0])
+                        fin_packet2 = self.reception(self.recvfrom(self.buffer_size)[0])
                         # judge the packet
                         if fin_packet2.test_the_packet(FIN=1):
                             self.set_number_receive(fin_packet2)
@@ -194,7 +199,7 @@ class RDTSocket(UnreliableSocket):
             fin_ack_packet = Packet(ACK=1, FIN=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
             self.transmission(fin_ack_packet, self.address)
             # receive ack
-            re = self._recv_from(self.buffer_size)
+            re = self.recvfrom(self.buffer_size)
             packet = Packet.from_bytes(re[0])
             if self.debug:
                 print('Receive:', packet)
@@ -208,11 +213,11 @@ class RDTSocket(UnreliableSocket):
 
         super().close()
 
-    def set_send_to(self, send_to):
-        self._send_to = send_to
-
-    def set_recv_from(self, recv_from):
-        self._recv_from = recv_from
+    # def set_send_to(self, send_to):
+    #     self._send_to = send_to
+    #
+    # def set_recv_from(self, recv_from):
+    #     self._recv_from = recv_from
 
     def set_address(self, address):
         self.address = address
@@ -231,12 +236,12 @@ class RDTSocket(UnreliableSocket):
         self.identity = id
 
     def transmission(self, packet, addr):
-        self._send_to(packet.to_bytes(), addr)
+        self.sendto(packet.to_bytes(), addr)
         if self.debug:
             print('Send:', packet)
 
-    def reception(self, addr):
-        packet = Packet.from_bytes(addr)
+    def reception(self, data):
+        packet = Packet.from_bytes(data)
         if self.debug:
             print('Receive:', packet)
         return packet
@@ -294,12 +299,12 @@ Size of sender's window     16
 """
 
 
-def checksum(payload):
-    sum = 0
-    for byte in payload:
-        sum += byte
-    sum = -(sum % 256)
-    return sum & 0xff
+# def checksum(payload):
+#     sum = 0
+#     for byte in payload:
+#         sum += byte
+#     sum = -(sum % 256)
+#     return sum & 0xff
 
 
 class Queue:
