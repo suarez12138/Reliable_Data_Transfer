@@ -1,4 +1,4 @@
-from rdt_test import RDTSocket
+from rdt_test3 import RDTSocket
 
 SERVER_ADDR = '127.0.0.1'
 SERVER_PORT = 6666

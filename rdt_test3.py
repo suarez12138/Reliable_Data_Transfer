@@ -9,6 +9,7 @@ import time
 from packet import Packet
 import functools
 
+
 class RDTSocket(UnreliableSocket):
     """
     The functions with which you are to build your RDT.
@@ -24,8 +25,9 @@ class RDTSocket(UnreliableSocket):
 
     """
 
-    def __init__(self, rate=None, debug=True):
+    def __init__(self, rate=10240, debug=True):
         super().__init__(rate=rate)
+        self.time_out = 2
         self._rate = rate
         # self._send_to = None
         # self._recv_from = None
@@ -43,13 +45,13 @@ class RDTSocket(UnreliableSocket):
 
     def accept(self) -> ('RDTSocket', (str, int)):
         """
-        Accept a connection. The socket must be bound to an address and listening for
-        connections. The return value is a pair (conn, address) where conn is a new
-        socket object usable to send and receive data on the connection, and address
-        is the address bound to the socket on the other end of the connection.
+               Accept a connection. The socket must be bound to an address and listening for
+               connections. The return value is a pair (conn, address) where conn is a new
+               socket object usable to send and receive data on the connection, and address
+               is the address bound to the socket on the other end of the connection.
 
-        This function should be blocking.
-        """
+               This function should be blocking.
+               """
         conn, addr = RDTSocket(self._rate), None
         ##receive syn
         conn.set_identity(0)
@@ -79,6 +81,52 @@ class RDTSocket(UnreliableSocket):
         conn.set_address(addr)
 
         return conn, addr
+        # ack_list = []
+        # # open receive thread
+        #
+        # conn, addr = RDTSocket(self._rate), None
+        # recv = threading.Thread(target=conn.recv_many, args=(ack_list,))
+        # ##receive syn
+        # conn.set_identity(0)
+        # # use port 6666 to receive first SYN
+        # while 1:
+        #     data, addr = self.recvfrom(conn.buffer_size)
+        #     packet = self.reception(data)
+        #     if packet.test_the_packet(SYN=1):
+        #         break
+        # conn.set_address(addr)  # 设置地址
+        # recv.start()
+        # time_start = 0
+        # # if packet.test_the_packet(SYN=1):
+        # conn.set_number_receive(packet)
+        # ##send syn,ack
+        # syn_ack_packet = Packet(SYN=1, ACK=1, SEQ_ACK=conn.seq_ack, SEQ=conn.seq)
+        # # use conn to transfer syn_ack_packet and it will be allot a new port, then always use conn but not server
+        # # server just need to receive the first SYN for each client
+        # conn.transmission(syn_ack_packet, addr)
+        # time_start = time.time()
+        # # receive ack
+        # # data2, addr2 = conn.recvfrom(conn.buffer_size)
+        # # ack_packet = conn.reception(data2)
+        # ##need to judge
+        # while 1:
+        #     if packet.test_the_packet(ACK=1):
+        #         conn.set_number_receive(packet)
+        #         if self.debug:
+        #             print('开启 Port:' + str(addr[1]) + ' 的连接')
+        #         break
+        #     if len(ack_list) == 0:
+        #         if time.time() > time_start + self.time_out:
+        #             time_start = time.time()
+        #             conn.transmission(syn_ack_packet, addr)
+        #         continue
+        #     packet = ack_list[0]
+        #     print(packet)
+        #     del ack_list[0]
+        #     # need to be modified
+        #
+        # _async_raise(recv.ident, SystemExit)
+        # return conn, addr
 
     def connect(self, address: (str, int)):
         """
@@ -108,6 +156,23 @@ class RDTSocket(UnreliableSocket):
 
         # set address after three times handshake
         self.set_address(addr)
+        #
+        # # receive syn ack
+        # data, addr = self.recvfrom(self.buffer_size)
+        # syn_ack_packet = self.reception(data)
+        # # need to add time out situation
+        #
+        # if syn_ack_packet.test_the_packet(SYN=1, ACK=1):
+        #     self.set_number_receive(syn_ack_packet)
+        #     # send ack
+        #     ack_packet = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
+        #     self.transmission(ack_packet, addr)
+        # else:
+        #     pass
+        #     # when the packet is wrong
+        #
+        # # set address after three times handshake
+        # self.set_address(addr)
 
     # return payload(in byte)
     def recv(self, bufsize: int) -> bytes:
@@ -166,21 +231,20 @@ class RDTSocket(UnreliableSocket):
                     self.transmission(packet_send, self.address)
 
     def check_receive_buffer(self, data):
+        # 先排好序，SEQ从小到大
         self.receive_buffer = sorted(self.receive_buffer, key=functools.cmp_to_key(Packet.cmp))
-        flag = 1
-        while flag:
-            flag = 0
-            i = 0
-            while i < len(self.receive_buffer):
-                packet = self.receive_buffer[i]
-                if self.seq_ack == packet.SEQ:  # 找到了一个可以接上的包，一系列操作，继续循环
-                    self.seq_ack += packet.LEN
-                    data += packet.PAYLOAD
-                    flag = 1
-                if packet.SEQ <= self.seq_ack:  # 过时的包， 删掉
-                    self.receive_buffer.remove(packet)
-                    i -= 1
-                i += 1
+        i = 0
+        while i < len(self.receive_buffer):
+            packet = self.receive_buffer[i]
+            if packet.SEQ > self.seq_ack:  # 比我大，直接结束
+                break
+            if self.seq_ack == packet.SEQ:  # 找到了一个可以接上的包，一系列操作，继续循环
+                self.seq_ack += packet.LEN
+                data += packet.PAYLOAD
+            if packet.SEQ < self.seq_ack:  # 过时的包， 删掉
+                self.receive_buffer.remove(packet)
+                i -= 1
+            i += 1
         return data, self.seq_ack
 
     def send(self, bytes: bytes):
@@ -191,7 +255,7 @@ class RDTSocket(UnreliableSocket):
         # assert self._send_to, "Connection not established yet. Use sendto instead."
 
         message_list = cut_the_message(self.buffer_size, bytes)
-        self.set_window_size(5)
+        self.set_window_size(10)
         pointer = 0
         window_list = Queue()
         ack_list = []
@@ -251,7 +315,7 @@ class RDTSocket(UnreliableSocket):
                         window_list.items[k][1] = datetime.now().timestamp()
                         if self.debug:
                             print('Fast Retransmit:', window_list.items[k][0])
-                elif datetime.now().timestamp() - window_list.items[k][1] >= 3:
+                elif datetime.now().timestamp() - window_list.items[k][1] >= self.time_out:
                     self.sendto(window_list.items[k][0].to_bytes(), self.address)
                     window_list.items[k][1] = datetime.now().timestamp()
                     if self.debug:
@@ -271,12 +335,17 @@ class RDTSocket(UnreliableSocket):
             p = Packet.from_bytes(self.recvfrom(self.buffer_size)[0])
             list.append(p)
 
+    def recv_only(self, list): # 加上了地址
+        while True:
+            data, addr = self.recvfrom(self.buffer_size)
+            packet=Packet.from_bytes(data)
+            list.append([packet,addr])
+
     def close(self):
         """
         Finish the connection and release resources. For simplicity, assume that
         after a socket is closed, neither futher sends nor receives are allowed.
         """
-        print("close()")
         ack_list = []
         # open receive thread
         recv = threading.Thread(target=self.recv_many, args=(ack_list,))
@@ -289,14 +358,14 @@ class RDTSocket(UnreliableSocket):
             flag_fin = 0
             while True:
                 if len(ack_list) == 0:
-                    if time.time() > time_start + 2:
+                    if time.time() > time_start + self.time_out:
                         time_start = time.time()
                         fin_packet = Packet(ACK=1, FIN=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
                         self.transmission(fin_packet, self.address)
                     continue
                 packet = ack_list[0]
                 del ack_list[0]
-                if flag_fin==0 and packet.test_the_packet(ACK=1):
+                if flag_fin == 0 and packet.test_the_packet(ACK=1):
                     print("receive:", packet)
                     self.set_number_receive(packet)
                     flag_fin = 1
@@ -351,15 +420,19 @@ class RDTSocket(UnreliableSocket):
             fin_ack_packet = Packet(ACK=1, FIN=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
             self.transmission(fin_ack_packet, self.address)
             time_start = time.time()
+            count = 0
             while 1:
-                if len(ack_list)==0:
-                    if time.time() > time_start+2:
+                if len(ack_list) == 0:
+                    if time.time() > time_start + self.time_out:
                         ack_packet = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
                         self.transmission(ack_packet, self.address)
                         # send fin,ack
                         fin_ack_packet = Packet(ACK=1, FIN=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
                         self.transmission(fin_ack_packet, self.address)
                         time_start = time.time()
+                        count += 1
+                        if count > 3:
+                            break
                     continue
                 # receive ack
                 # re = self.recvfrom(self.buffer_size)
@@ -427,6 +500,7 @@ def cut_the_message(buffer_size=2048, message=b''):
     message_in_part.append(message[pointer:])
     return message_in_part
 
+
 def _async_raise(tid, exctype):
     tid = ctypes.c_long(tid)
     if not inspect.isclass(exctype):
@@ -437,6 +511,8 @@ def _async_raise(tid, exctype):
     elif res != 1:
         ctypes.pythonapi.PyThreadState_SetAsyncExc(tid, None)
         raise SystemError("PyThreadState_SetAsyncExc failed")
+
+
 """
 You can define additional functions and classes to do thing such as packing/unpacking packets, or threading.
 

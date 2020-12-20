@@ -1,6 +1,6 @@
 import time
 
-from rdt_test import RDTSocket
+from rdt_test3 import RDTSocket
 
 SERVER_ADDR = '127.0.0.1'
 SERVER_PORT = 6666
@@ -21,5 +21,5 @@ while True:
         # conn.send(data)
 
     conn.close()
-    print(time.time() - begin)
     print(data)
+    print(time.time() - begin)

@@ -33,3 +33,4 @@ sorted_movie = sorted(movie, key=functools.cmp_to_key(cmp))
 
 for each in sorted_movie:
     print(each)
+
