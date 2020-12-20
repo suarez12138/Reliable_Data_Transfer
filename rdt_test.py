@@ -1,3 +1,5 @@
+import ctypes
+import inspect
 import math
 from datetime import datetime
 
@@ -124,8 +126,8 @@ class RDTSocket(UnreliableSocket):
         data = b''  # 存储payload
         recv_list = []
         #      1.开一个进程收包
-        recv = threading.Thread(target=self.recv_many, args=(recv_list,))
-        recv.start()
+        recv2 = threading.Thread(target=self.recv_many, args=(recv_list,))
+        recv2.start()
         # recv.join()
         #    while:
         # 预先创建一个发包
@@ -140,6 +142,7 @@ class RDTSocket(UnreliableSocket):
             # packet = Packet.from_bytes(packet_bytes)
             if packet.test_the_packet(FIN=1, ACK=1):
                 self.set_number_receive(packet)
+                _async_raise(recv2.ident, SystemExit)
                 return data
             elif packet.test_the_packet(ACK=1):
                 #           7. 如果来的seq = 我的ack： 返回ack = seq+len, data
@@ -254,6 +257,7 @@ class RDTSocket(UnreliableSocket):
                 else:
                     break
             if pointer == len(message_list) and len(window_list.items) == 0:
+                _async_raise(recv.ident, SystemExit)
                 break
 
     def recv_many(self, list):
@@ -263,14 +267,13 @@ class RDTSocket(UnreliableSocket):
     def close(self):
         """
         Finish the connection and release resources. For simplicity, assume that
-        after a socket is closed, neither futher sends nor receives are allowed.
+        after a socket is closed, neither further sends nor receives are allowed.
         """
 
         # send fin
         if self.identity:
             fin_packet = Packet(ACK=1, FIN=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
             self.transmission(fin_packet, self.address)
-
             # receive ack
             while True:
                 ack_packet1 = self.reception(self.recvfrom(self.buffer_size)[0])
@@ -281,7 +284,7 @@ class RDTSocket(UnreliableSocket):
                     while True:
                         fin_packet2 = self.reception(self.recvfrom(self.buffer_size)[0])
                         # judge the packet
-                        if fin_packet2.test_the_packet(FIN=1,ACK=1):
+                        if fin_packet2.test_the_packet(FIN=1, ACK=1):
                             self.set_number_receive(fin_packet2)
                             # send ack
                             ack_packet2 = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
@@ -294,7 +297,6 @@ class RDTSocket(UnreliableSocket):
                     continue
         else:
             # send ack
-            time.sleep(3)
             ack_packet = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
             self.transmission(ack_packet, self.address)
             # send fin,ack
@@ -362,6 +364,18 @@ def cut_the_message(buffer_size=2048, message=b''):
         pointer += buffer_size
     message_in_part.append(message[pointer:])
     return message_in_part
+
+
+def _async_raise(tid, exctype):
+    tid = ctypes.c_long(tid)
+    if not inspect.isclass(exctype):
+        exctype = type(exctype)
+    res = ctypes.pythonapi.PyThreadState_SetAsyncExc(tid, ctypes.py_object(exctype))
+    if res == 0:
+        raise ValueError("invalid thread id")
+    elif res != 1:
+        ctypes.pythonapi.PyThreadState_SetAsyncExc(tid, None)
+        raise SystemError("PyThreadState_SetAsyncExc failed")
 
 
 """
