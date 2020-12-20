@@ -185,7 +185,7 @@ class RDTSocket(UnreliableSocket):
         recv = threading.Thread(target=self.recv_many)
         recv.start()
         #    while:
-        packet_send = Packet(SEQ_ACK=self.seq_ack, SEQ=self.seq)  # 预先创建一个发包
+        packet_send = Packet(SEQ_ACK=self.seq_ack, SEQ=self.seq,ACK=1)  # 预先创建一个发包
         while 1:
             # 2. 从list里拿一个收到的包
             if len(self.ack_list) == 0:
@@ -227,7 +227,7 @@ class RDTSocket(UnreliableSocket):
                     # 检查 buffer ， 看是否可以连上
                     data, self.seq_ack = self.check_receive_buffer(data)
                     # 返回包
-                    packet_send = Packet(SEQ_ACK=self.seq_ack, SEQ=self.seq)
+                    packet_send = Packet(ACK=1,SEQ_ACK=self.seq_ack, SEQ=self.seq)
                     self.transmission(packet_send, self.address)
                 #           8. 如果来的seq > 我的ack：
                 #           如果可以就将包存在buffer里，返回我本来的ack
