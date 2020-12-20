@@ -115,6 +115,13 @@ class Packet:
 
         return output
 
+    def cmp(self, other):  # 自定义比较函数
+        if self.SEQ < other.SEQ:
+            return -1
+        elif self.SEQ == other.SEQ:
+            return 0
+        else:
+            return 1
 # if __name__ == "__main__":
 #     # test Packet
 #     packet = Packet.create(1, 2, b'\xFF', False, True, False)
