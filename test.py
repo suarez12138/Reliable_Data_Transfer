@@ -98,6 +98,7 @@ def send(self, bytes: bytes):
         # assert self._recv_from, "Connection not established yet. Use recvfrom instead."
         data = b''  # 存储payload
         recv_list=[]
+        recv_buffer=Queue()
         #      1.开一个进程收包
         recv = threading.Thread(target=self.recv_many,args=recv_list)
         recv.start()
@@ -127,17 +128,17 @@ def send(self, bytes: bytes):
                 #           8. 如果来的seq > 我的ack：
                 #           如果可以就将包存在buffer里，返回我本来的ack
                 elif packet.SEQ > self.seq_ack:
-                    if len(self.receive_buffer) < self.receive_buffer_size:
+                    if len(recv_buffer.items) < self.receive_buffer_size:
                         self.receive_buffer.append(packet)
                     packet_send = Packet(ACK=1, SEQ_ACK=self.seq_ack, SEQ=self.seq)
                     self.transmission(packet_send, self.address)
 
 
-    def check_receive_buffer(self, data):
+    def check_receive_buffer(self, data,recv_buffer):
         flag = 1
         while flag:
             flag = 0
-            for packet in self.receive_buffer:
+            for packet in recv_buffer.items:
                 if self.seq_ack == packet.SEQ:  # 找到了一个可以接上的包，一系列操作，继续循环
                     self.set_number_receive(packet)
                     data += packet.PAYLOAD
