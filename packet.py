@@ -70,15 +70,13 @@ class Packet:
         return packet
 
     def test_the_packet(self, SYN=0, FIN=0, ACK=0):
-        if SYN == 1:
-            if not self.SYN == 1:
-                return False
-        if FIN == 1:
-            if not self.FIN == 1:
-                return False
-        if ACK == 1:
-            if not self.ACK == 1:
-                return False
+
+        if not self.SYN == SYN:
+            return False
+        if not self.FIN == FIN:
+            return False
+        if not self.ACK == ACK:
+            return False
         if not self.LEN == len(self.PAYLOAD):
             return False
         if not self.checksum(self.to_bytes()) == 0:
@@ -113,10 +111,17 @@ class Packet:
         output += "LEN={} ".format(self.LEN)
         if self.LEN != 0:
             output += "\n "
-            # output += str(self.PAYLOAD)
+            output += str(self.PAYLOAD)
 
         return output
 
+    def cmp(self, other):  # 自定义比较函数
+        if self.SEQ < other.SEQ:
+            return -1
+        elif self.SEQ == other.SEQ:
+            return 0
+        else:
+            return 1
 # if __name__ == "__main__":
 #     # test Packet
 #     packet = Packet.create(1, 2, b'\xFF', False, True, False)
