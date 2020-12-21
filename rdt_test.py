@@ -304,10 +304,7 @@ class RDTSocket(UnreliableSocket):
             self.transmission(fin_ack_packet, self.address)
             # receive ack
             re = self.recvfrom(self.buffer_size)
-            packet = Packet.from_bytes(re[0])
-            if self.debug:
-                print('Receive:', packet)
-            data = packet.PAYLOAD
+            packet = self.reception(re[0])
             if packet.test_the_packet(ACK=1):
                 self.set_number_receive(packet)
                 if self.debug:

@@ -315,7 +315,8 @@ class RDTSocket(UnreliableSocket):
                         window_list.items[k][1] = datetime.now().timestamp()
                         if self.debug:
                             print('Fast Retransmit:', window_list.items[k][0])
-                elif datetime.now().timestamp() - window_list.items[k][1] >= self.time_out:
+                elif window_list.items[k][2] == 0 and datetime.now().timestamp() - window_list.items[k][
+                    1] >= self.time_out:
                     self.sendto(window_list.items[k][0].to_bytes(), self.address)
                     window_list.items[k][1] = datetime.now().timestamp()
                     if self.debug:
@@ -335,11 +336,11 @@ class RDTSocket(UnreliableSocket):
             p = Packet.from_bytes(self.recvfrom(self.buffer_size)[0])
             list.append(p)
 
-    def recv_only(self, list): # 加上了地址
+    def recv_only(self, list):  # 加上了地址
         while True:
             data, addr = self.recvfrom(self.buffer_size)
-            packet=Packet.from_bytes(data)
-            list.append([packet,addr])
+            packet = Packet.from_bytes(data)
+            list.append([packet, addr])
 
     def close(self):
         """
@@ -441,11 +442,10 @@ class RDTSocket(UnreliableSocket):
                 del ack_list[0]
                 if self.debug:
                     print('Receive:', packet)
-                data = packet.PAYLOAD
                 if packet.test_the_packet(ACK=1):
                     self.set_number_receive(packet)
                     if self.debug:
-                        print('关闭 Port:' + ' 的连接')
+                        print('关闭 Port:' + self.address[1] + ' 的连接')
                     break
                 else:
                     continue
