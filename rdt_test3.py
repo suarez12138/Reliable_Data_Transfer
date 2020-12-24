@@ -27,7 +27,7 @@ class RDTSocket(UnreliableSocket):
 
     def __init__(self, rate=10240, debug=True):
         super().__init__(rate=rate)
-        self.time_out = 2
+        self.time_out = 3
         self._rate = rate
         # self._send_to = None
         # self._recv_from = None
@@ -239,37 +239,29 @@ class RDTSocket(UnreliableSocket):
                     self.set_number_receive(packet)
                     data += packet.PAYLOAD
                     # 检查 buffer ， 看是否可以连上
-                    self.check_receive_buffer(data)
-                    # 返回包
-                    packet_send = Packet(ACK=1, SEQ_ACK=self.seq_ack, SEQ=self.seq)
-                    self.transmission(packet_send, self.address)
+                    data = self.check_receive_buffer(data)
+                # 返回包
                 #           8. 如果来的seq > 我的ack：
                 #           如果可以就将包存在buffer里，返回我本来的ack
-                elif packet.SEQ > self.seq_ack:
-                    if len(self.receive_buffer) < self.receive_buffer_size:
+                else:
+                    if len(self.receive_buffer) < self.receive_buffer_size and packet.SEQ > self.seq_ack:
                         self.receive_buffer.append(packet)
-                    packet_send = Packet(ACK=1, SEQ_ACK=self.seq_ack, SEQ=self.seq)
-                    self.transmission(packet_send, self.address)
-                elif packet.SEQ < self.seq_ack:
-                    packet_send = Packet(ACK=1, SEQ_ACK=self.seq_ack, SEQ=self.seq)
-                    self.transmission(packet_send, self.address)
+                self.transmission(Packet(ACK=1, SEQ_ACK=self.seq_ack, SEQ=self.seq), self.address)
 
     def check_receive_buffer(self, data):
         # 先排好序，SEQ从小到大
         self.receive_buffer = sorted(self.receive_buffer, key=functools.cmp_to_key(Packet.cmp))
-        i = 0
-        while i < len(self.receive_buffer):
-            packet = self.receive_buffer[i]
+        while len(self.receive_buffer) > 0:
+            packet = self.receive_buffer[0]
             if packet.SEQ > self.seq_ack:  # 比我大，直接结束
                 break
-            if self.seq_ack == packet.SEQ:  # 找到了一个可以接上的包，一系列操作，继续循环
-                self.seq_ack += packet.LEN
-                data += packet.PAYLOAD
-            if packet.SEQ < self.seq_ack:  # 过时的包， 删掉
-                self.receive_buffer.remove(packet)
-                i -= 1
-            i += 1
-        return data, self.seq_ack
+            else:
+                if self.seq_ack == packet.SEQ:  # 找到了一个可以接上的包，一系列操作，继续循环
+                    self.set_number_receive(packet)
+                    data += packet.PAYLOAD
+                self.receive_buffer.pop(0)
+
+        return data
 
     def send(self, bytes: bytes):
         """
@@ -281,79 +273,86 @@ class RDTSocket(UnreliableSocket):
         message_list = cut_the_message(self.buffer_size, bytes)
         self.set_window_size(10)
         pointer = 0
-        window_list = Queue()
-        ack_list = []
-
+        window_list = []
+        # ack_list = []
+        max_ack = [-1]
+        duplicated_ack = [-1]
         # open receive thread
-        recv = threading.Thread(target=self.recv_many, args=(ack_list,))
-        recv.start()
+        # recv = threading.Thread(target=self.recv_many, args=(ack_list,))
+        # recv.start()
+
+        check_ack = threading.Thread(target=self.check_ack, args=(max_ack, duplicated_ack))
+        check_ack.start()
         # recv.join()
         while True:
             # length is now in window waiting to be acked
-            length: int = len(window_list.items)
+            length: int = len(window_list)
             send_number = self.window_size - length
             # push
             for i in range(send_number):
                 if pointer < len(message_list):
                     packet = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack, data=message_list[pointer])
                     self.set_number_send(packet)
-                    # (packet,send_time,condition:0 is not ack and 1 is ack)
-                    window_list.push([packet, 0, 0])
+                    # (packet,send_time)
+                    window_list.append([packet, 0.0])
                     pointer += 1
                 else:
                     send_number = i
                     break
             # send new packet
             for j in range(length, send_number + length):
-                window_list.items[j][1] = datetime.now().timestamp()
                 # print()
-                self.transmission(window_list.items[j][0], self.address)
+                self.transmission(window_list[j][0], self.address)
+                window_list[j][1] = time.time()
                 # self.sendto(window_list.items[j + length], self.address)
                 # if self.debug:
                 #     print('Send:', window_list.items[j + length][0])
 
             # to check the retransmisson and ack, find the max ack
-            duplicated_ack = 0
-            max_ack = 0
             # for packet in ack_list:
-            while len(ack_list) > 0:
-                packet = ack_list[0]
-                if self.debug:
-                    print('Receive', packet)
-                if packet.test_the_packet(ACK=1):
-                    if max_ack < packet.SEQ_ACK:
-                        max_ack = packet.SEQ_ACK
-                    elif max_ack == packet.SEQ_ACK:
-                        duplicated_ack += 1
-                else:
-                    pass
-                ack_list.pop(0)
-
             # check if old packet is timeout or retransmit
-            for k in range(length):
-                if window_list.items[k][0].SEQ < max_ack:
-                    window_list.items[k][2] = 1
-                elif window_list.items[k][0].SEQ == max_ack:
-                    if duplicated_ack >= 3:
-                        self.sendto(window_list.items[k][0].to_bytes(), self.address)
-                        window_list.items[k][1] = datetime.now().timestamp()
+            ack_boundary = 0
+            for k in range(len(window_list)):
+                if window_list[k][0].SEQ < max_ack[0]:
+                    continue
+                if window_list[k][0].SEQ == max_ack[0]:
+                    ack_boundary = k
+                    if duplicated_ack[0] >= max_ack[0]:
+                        self.sendto(window_list[k][0].to_bytes(), self.address)
+                        window_list[k][1] = time.time()
                         if self.debug:
-                            print('Fast Retransmit:', window_list.items[k][0])
-                elif window_list.items[k][2] == 0 and datetime.now().timestamp() - window_list.items[k][
-                    1] >= self.time_out:
-                    self.sendto(window_list.items[k][0].to_bytes(), self.address)
-                    window_list.items[k][1] = datetime.now().timestamp()
+                            print('Fast Retransmit:', window_list[k][0])
+                        continue
+                if time.time() - window_list[k][1] >= self.time_out:
+                    self.sendto(window_list[k][0].to_bytes(), self.address)
+                    window_list[k][1] = datetime.now().timestamp()
                     if self.debug:
-                        print('Timeout Retransmit:', window_list.items[k][0])
+                        print('Timeout Retransmit:', window_list[k][0])
 
-            while len(window_list.items) > 0:
-                if window_list.items[0][2] == 1:
-                    window_list.pop()
-                else:
-                    break
-            if pointer == len(message_list) and len(window_list.items) == 0:
-                _async_raise(recv.ident, SystemExit)
+            if len(window_list) > 0:
+                window_list = window_list[ack_boundary:]
+                if window_list[-1][0].SEQ < max_ack[0]:
+                    window_list = []
+
+            if pointer == len(message_list) and len(window_list) == 0:
+                # _async_raise(recv.ident, SystemExit)
+                _async_raise(check_ack.ident, SystemExit)
                 break
+
+    def check_ack(self, max_ack, duplicated_ack):
+        dup_ack_num = 0
+        while True:
+            packet = Packet.from_bytes(self.recvfrom(self.buffer_size)[0])
+            if self.debug:
+                print('Receive:', packet)
+            if packet.test_the_packet(ACK=1):
+                if max_ack[0] < packet.SEQ_ACK:
+                    max_ack[0] = packet.SEQ_ACK
+                    dup_ack_num = 0
+                elif max_ack[0] == packet.SEQ_ACK:
+                    dup_ack_num += 1
+            if dup_ack_num >= 3:
+                duplicated_ack[0] = max_ack[0]
 
     def recv_many(self, list):
         while True:
@@ -469,7 +468,7 @@ class RDTSocket(UnreliableSocket):
                 if packet.test_the_packet(ACK=1):
                     self.set_number_receive(packet)
                     if self.debug:
-                        print('关闭 Port:' + self.address[1] + ' 的连接')
+                        print('关闭 Port:', self.address[1], '的连接')
                     break
                 else:
                     continue
