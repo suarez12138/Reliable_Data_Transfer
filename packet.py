@@ -118,9 +118,9 @@ class Packet:
         output += "SEQ={}, ".format(self.SEQ)
         output += "SEQ_ACK={}, ".format(self.SEQ_ACK)
         output += "LEN={} ".format(self.LEN)
-        if self.LEN != 0:
-            output += "\n "
-            output += str(self.PAYLOAD)
+        # if self.LEN != 0:
+        #     output += "\n "
+        #     output += str(self.PAYLOAD)
 
         return output
 
