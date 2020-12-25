@@ -43,7 +43,7 @@ class RDTSocket(UnreliableSocket):
         self.receive_buffer = []
         self.receive_buffer_size = 1000
 
-    @property
+
     def accept(self) -> ('RDTSocket', (str, int)):
         """
                Accept a connection. The socket must be bound to an address and listening for
@@ -104,7 +104,7 @@ class RDTSocket(UnreliableSocket):
             # Packet is wrong
         # _async_raise(recv_accept2.ident, SystemExit)
         conn.set_address(target_addr)
-        return conn, addr
+        return conn, conn.address
 
         # ack_list = []
         # # open receive thread
