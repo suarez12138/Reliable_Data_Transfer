@@ -42,10 +42,10 @@ class Server(ThreadingUDPServer):
             # loss_rate=0.1
             # if random.random() < loss_rate:
             #     return
-            corrupt_rate = 0.1
-            if random.random() < corrupt_rate:
-                i = len(data)-1
-                data = data[:i] + (data[i] + 1).to_bytes(1, 'big') + data[i+1:]
+            # corrupt_rate = 0.1
+            # if random.random() < corrupt_rate:
+            #     i = len(data)-1
+            #     data = data[:i] + (data[i] + 1).to_bytes(1, 'big') + data[i+1:]
             """
             blockingly process each request
             you can add random loss/corrupt here

@@ -43,7 +43,6 @@ class RDTSocket(UnreliableSocket):
         self.receive_buffer = []
         self.receive_buffer_size = 1000
 
-
     def accept(self) -> ('RDTSocket', (str, int)):
         """
                Accept a connection. The socket must be bound to an address and listening for
@@ -67,7 +66,7 @@ class RDTSocket(UnreliableSocket):
             syn_packet = syn_list[0]
             syn_list.pop(0)
             if self.debug:
-                print('Receive:' + str(syn_packet[0])+'\n')
+                print('Receive:' + str(syn_packet[0]) + '\n')
             # Receive SYN
             if syn_packet[0].test_the_packet(SYN=1):
                 conn.set_number_receive(syn_packet[0])
@@ -89,12 +88,12 @@ class RDTSocket(UnreliableSocket):
         while True:
             ack_packet = Packet.from_bytes(conn.recvfrom(self.buffer_size)[0])
             if self.debug:
-                print('Receive:' + str(ack_packet)+'\n')
+                print('Receive:' + str(ack_packet) + '\n')
             # Receive ACK
             if ack_packet.test_the_packet(ACK=1):
                 conn.set_number_receive(ack_packet)
                 if self.debug:
-                    print('开启 Port:' + str(target_addr[1]) + ' 的连接'+'\n')
+                    print('开启 Port:' + str(target_addr[1]) + ' 的连接' + '\n')
                 break
             if time.time() - begin > self.time_out:
                 # The second threading need to cut down manually if last ACK not arrive or wrong
@@ -181,7 +180,7 @@ class RDTSocket(UnreliableSocket):
                 syn_ack_packet = syn_ack_list[0]
                 syn_ack_list.pop(0)
                 if self.debug:
-                    print('Receive:' + str(syn_ack_packet[0])+'\n')
+                    print('Receive:' + str(syn_ack_packet[0]) + '\n')
                 # Receive SYN ACK
                 if syn_ack_packet[0].test_the_packet(SYN=1, ACK=1):
                     self.set_number_receive(syn_ack_packet[0])
@@ -229,19 +228,28 @@ class RDTSocket(UnreliableSocket):
             packet = recv_list[0]
             recv_list.pop(0)
             if self.debug:
-                print('Receive:' + str(packet)+'\n')
+                print('Receive:' + str(packet) + '\n')
             # packet = Packet.from_bytes(packet_bytes)
+
             if packet.test_the_packet(FIN=1, ACK=1):
                 self.set_number_receive(packet)
-                _async_raise(recv.ident, SystemExit)
-                return data
-            elif packet.test_the_packet(ACK=1):
+                # _async_raise(recv.ident, SystemExit)
+                return None
+            elif packet.test_the_packet(ACK=1) or packet.test_the_packet(END=1,ACK=1):
                 #           7. 如果来的seq = 我的ack： 返回ack = seq+len, data
                 if packet.SEQ == self.seq_ack:
                     self.set_number_receive(packet)
                     data += packet.PAYLOAD
+                    if packet.test_the_packet(END=1, ACK=1):
+                        self.transmission(Packet(ACK=1, SEQ_ACK=self.seq_ack, SEQ=self.seq), self.address)
+                        _async_raise(recv.ident, SystemExit)
+                        return data
                     # 检查 buffer ， 看是否可以连上
-                    data = self.check_receive_buffer(data)
+                    data, end = self.check_receive_buffer(data)
+                    if end:
+                        self.transmission(Packet(ACK=1, SEQ_ACK=self.seq_ack, SEQ=self.seq), self.address)
+                        _async_raise(recv.ident, SystemExit)
+                        return data
                 # 返回包
                 #           8. 如果来的seq > 我的ack：
                 #           如果可以就将包存在buffer里，返回我本来的ack
@@ -252,9 +260,11 @@ class RDTSocket(UnreliableSocket):
                         pass
                 self.transmission(Packet(ACK=1, SEQ_ACK=self.seq_ack, SEQ=self.seq), self.address)
 
+
     def check_receive_buffer(self, data):
         # 先排好序，SEQ从小到大
         self.receive_buffer = sorted(self.receive_buffer, key=functools.cmp_to_key(Packet.cmp))
+        end = False
         while len(self.receive_buffer) > 0:
             packet = self.receive_buffer[0]
             if packet.SEQ > self.seq_ack:  # 比我大，直接结束
@@ -263,8 +273,10 @@ class RDTSocket(UnreliableSocket):
                 if self.seq_ack == packet.SEQ:  # 找到了一个可以接上的包，一系列操作，继续循环
                     self.set_number_receive(packet)
                     data += packet.PAYLOAD
+                    if packet.test_the_packet(END=1, ACK=1):
+                        end = True
                 self.receive_buffer.pop(0)
-        return data
+        return data, end
 
     def send(self, bytes: bytes):
         """
@@ -294,7 +306,10 @@ class RDTSocket(UnreliableSocket):
             # push
             for i in range(send_number):
                 if pointer < len(message_list):
-                    packet = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack, data=message_list[pointer])
+                    if pointer == len(message_list) - 1:
+                        packet = Packet(END=1, ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack, data=message_list[pointer])
+                    else:
+                        packet = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack, data=message_list[pointer])
                     self.set_number_send(packet)
                     # (packet,send_time)
                     window_list.append([packet, 0.0])
@@ -320,7 +335,7 @@ class RDTSocket(UnreliableSocket):
                         self.sendto(window_list[k][0].to_bytes(), self.address)
                         window_list[k][1] = time.time()
                         if self.debug:
-                            print('Fast Retransmit:' + str(window_list[k][0])+'\n')
+                            print('Fast Retransmit:' + str(window_list[k][0]) + '\n')
                         dup_ack_num[0] = 0
                         duplicated_ack[0] = -1
                         # 快恢复，ssthresh砍半，window等于ssthresh，进入拥塞控制（向下取整）
@@ -330,7 +345,7 @@ class RDTSocket(UnreliableSocket):
                     self.sendto(window_list[k][0].to_bytes(), self.address)
                     window_list[k][1] = datetime.now().timestamp()
                     if self.debug:
-                        print('Timeout Retransmit:' + str(window_list[k][0])+'\n')
+                        print('Timeout Retransmit:' + str(window_list[k][0]) + '\n')
                         # 慢开始，window等于一，
 
             if len(window_list) > 0:
@@ -347,7 +362,7 @@ class RDTSocket(UnreliableSocket):
         while True:
             packet = Packet.from_bytes(self.recvfrom(self.buffer_size)[0])
             if self.debug:
-                print('Receive:' + str(packet)+'\n')
+                print('Receive:' + str(packet) + '\n')
             if packet.test_the_packet(ACK=1):
                 if max_ack[0] < packet.SEQ_ACK:
                     max_ack[0] = packet.SEQ_ACK
@@ -395,11 +410,11 @@ class RDTSocket(UnreliableSocket):
                 packet = ack_list[0]
                 ack_list.pop(0)
                 if flag_ack == 0 and packet.test_the_packet(ACK=1):
-                    print("receive:" + str(packet)+'\n')
+                    print("receive:" + str(packet) + '\n')
                     self.set_number_receive(packet)
                     flag_ack += 1
                 elif flag_fin == 0 and packet.test_the_packet(FIN=1, ACK=1):
-                    print("receive:" + str(packet)+'\n')
+                    print("receive:" + str(packet) + '\n')
                     self.set_number_receive(packet)
                     flag_fin += 1
                     # send ack
@@ -457,7 +472,7 @@ class RDTSocket(UnreliableSocket):
                         count += 1
                         if count >= 3:
                             if self.debug:
-                                print('长时间未收到ack，自动关闭 Port:' + str(self.address[1]) + '的连接'+'\n')
+                                print('长时间未收到ack，自动关闭 Port:' + str(self.address[1]) + '的连接' + '\n')
                             break
                         ack_packet = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
                         self.transmission(ack_packet, self.address)
@@ -469,13 +484,13 @@ class RDTSocket(UnreliableSocket):
                 packet = ack_list[0]
                 ack_list.pop(0)
                 if self.debug:
-                    print('Receive:' + str(packet)+'\n')
+                    print('Receive:' + str(packet) + '\n')
                 if packet.test_the_packet(FIN=1, ACK=1):
                     count -= 1
                 elif packet.test_the_packet(ACK=1):
                     self.set_number_receive(packet)
                     if self.debug:
-                        print('关闭 Port:' + str(self.address[1]) + '的连接'+'\n')
+                        print('关闭 Port:' + str(self.address[1]) + '的连接' + '\n')
                     break
                 else:
                     continue
@@ -501,12 +516,12 @@ class RDTSocket(UnreliableSocket):
     def transmission(self, packet, addr):
         self.sendto(packet.to_bytes(), addr)
         if self.debug:
-            print('Send:' + str(packet)+'\n')
+            print('Send:' + str(packet) + '\n')
 
     def reception(self, data):
         packet = Packet.from_bytes(data)
         if self.debug:
-            print('Receive:' + str(packet)+'\n')
+            print('Receive:' + str(packet) + '\n')
         return packet
 
     def set_window_size(self, param):
@@ -549,7 +564,7 @@ Segment Format:
 
 |0 1 2 3 4 5 6 7 8|0 1 2 3 4 5 6 7 8|0 1 2 3 4 5 6 7 8|0 1 2 3 4 5 6 7 8| 
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|           (NO USE)          |S|F|A|              CHECKSUM             |
+|           (NO USE)        |E|S|F|A|              CHECKSUM             |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |                              SEQ                                      |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -566,6 +581,7 @@ Flags:
  - S-SYN                      Synchronize
  - F-FIN                      Finish
  - A-ACK                      Acknowledge
+ - E-END                      EndOf
 
 Ranges:
  - Payload Length           0 - 2^32  (append zeros to the end if length < 1440)

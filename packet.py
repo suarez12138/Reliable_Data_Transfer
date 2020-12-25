@@ -1,5 +1,6 @@
 class Packet:
-    def __init__(self, SYN=False, FIN=False, ACK=False, SEQ=0, SEQ_ACK=0, data=b''):
+    def __init__(self, END=False, SYN=False, FIN=False, ACK=False, SEQ=0, SEQ_ACK=0, data=b''):
+        self.END = END
         self.SYN = SYN
         self.ACK = ACK
         self.FIN = FIN
@@ -13,6 +14,8 @@ class Packet:
     def to_bytes(self):
         data = b''
         flag = 0
+        if self.END:
+            flag += 0x0008
         if self.SYN:
             flag += 0x0004
         if self.FIN:
@@ -42,6 +45,8 @@ class Packet:
     def from_bytes(byte: bytes):
         packet = Packet()
         flag = int.from_bytes(byte[0:2], byteorder='big')
+        if flag & 0x8008 != 0:
+            packet.END = True
         if flag & 0x8004 != 0:
             packet.SYN = True
         if flag & 0x0002 != 0:
@@ -69,8 +74,10 @@ class Packet:
         # assert Packet.checksum(packet.to_bytes()) == 0
         return packet
 
-    def test_the_packet(self, SYN=0, FIN=0, ACK=0):
+    def test_the_packet(self, END=0, SYN=0, FIN=0, ACK=0):
 
+        if not self.END == END:
+            return False
         if not self.SYN == SYN:
             return False
         if not self.FIN == FIN:
@@ -98,6 +105,8 @@ class Packet:
         output = ""
         output += "[ "
 
+        if self.END:
+            output += "\033[1;92mEND\033[0m "
         if self.SYN:
             output += "\033[1;91mSYN\033[0m "
         if self.FIN:
