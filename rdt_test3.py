@@ -168,18 +168,20 @@ class RDTSocket(UnreliableSocket):
         syn_ack_packet = None
         syn_packet = Packet(SYN=1)
         while_flag = True
-        while while_flag:
-            begin = time.time()
-            self.transmission(syn_packet, address)
-            # Initialize the threading after transmission and a port is given
-            syn_ack_list = []
-            recv_connect = threading.Thread(target=self.recv_syn, args=(syn_ack_list,))
-            recv_connect.start()
 
+        begin = time.time()
+        self.transmission(syn_packet, address)
+        # Initialize the threading after transmission and a port is given
+        syn_ack_list = []
+        recv_connect = threading.Thread(target=self.recv_syn, args=(syn_ack_list,))
+        recv_connect.start()
+
+        while while_flag:
             while True:
                 if len(syn_ack_list) == 0:
                     if time.time() - begin > self.time_out:
-                        break
+                        begin = time.time()
+                        self.transmission(syn_packet, address)
                     continue
                 syn_ack_packet = syn_ack_list[0]
                 syn_ack_list.pop(0)
@@ -322,12 +324,15 @@ class RDTSocket(UnreliableSocket):
                         window_list[k][1] = time.time()
                         if self.debug:
                             print('Fast Retransmit:', window_list[k][0])
+                        #快恢复，ssthresh砍半，window等于ssthresh，进入拥塞控制（向下取整）
                         continue
+
                 if time.time() - window_list[k][1] >= self.time_out:
                     self.sendto(window_list[k][0].to_bytes(), self.address)
                     window_list[k][1] = datetime.now().timestamp()
                     if self.debug:
                         print('Timeout Retransmit:', window_list[k][0])
+                        #慢开始，window等于一，
 
             if len(window_list) > 0:
                 window_list = window_list[ack_boundary:]
@@ -351,6 +356,7 @@ class RDTSocket(UnreliableSocket):
                     dup_ack_num = 0
                 elif max_ack[0] == packet.SEQ_ACK:
                     dup_ack_num += 1
+                #如果是慢开始，window的size加一
             if dup_ack_num >= 3:
                 duplicated_ack[0] = max_ack[0]
                 dup_ack_num = 0
@@ -443,7 +449,7 @@ class RDTSocket(UnreliableSocket):
             #             continue
         else:
             time_start = time.time()
-            count = 0
+            count = 1
             ack_packet = Packet(ACK=1, SEQ=self.seq, SEQ_ACK=self.seq_ack)
             self.transmission(ack_packet, self.address)
             # send fin,ack
@@ -453,7 +459,7 @@ class RDTSocket(UnreliableSocket):
                 if len(ack_list) == 0:
                     if time.time() > time_start + self.time_out:
                         count += 1
-                        if count > 3:
+                        if count >= 3:
                             if self.debug:
                                 print('长时间未收到ack，自动关闭 Port:', self.address[1], '的连接')
                             break
@@ -468,7 +474,9 @@ class RDTSocket(UnreliableSocket):
                 ack_list.pop(0)
                 if self.debug:
                     print('Receive:', packet)
-                if packet.test_the_packet(ACK=1):
+                if packet.test_the_packet(FIN=1, ACK=1):
+                    count -= 1
+                elif packet.test_the_packet(ACK=1):
                     self.set_number_receive(packet)
                     if self.debug:
                         print('关闭 Port:', self.address[1], '的连接')
