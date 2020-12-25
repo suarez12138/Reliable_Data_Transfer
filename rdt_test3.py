@@ -25,9 +25,9 @@ class RDTSocket(UnreliableSocket):
 
     """
 
-    def __init__(self, rate=10240, debug=True):
+    def __init__(self, rate=None, debug=True):
         super().__init__(rate=rate)
-        self.time_out = 3
+        self.time_out = 5
         self._rate = rate
         # self._send_to = None
         # self._recv_from = None
@@ -217,11 +217,12 @@ class RDTSocket(UnreliableSocket):
         # 思路：
         # data = None
         # assert self._recv_from, "Connection not established yet. Use recvfrom instead."
-        data = b''  # 存储payload
+
         recv_list = []
         #      1.开一个进程收包
         recv = threading.Thread(target=self.recv_many, args=(recv_list,))
         recv.start()
+        data = b''  # 存储payload
         # recv.join()
         #    while:
         # 预先创建一个发包
@@ -283,11 +284,12 @@ class RDTSocket(UnreliableSocket):
         # ack_list = []
         max_ack = [-1]
         duplicated_ack = [-1]
+        dup_ack_num = [0]
         # open receive thread
         # recv = threading.Thread(target=self.recv_many, args=(ack_list,))
         # recv.start()
 
-        check_ack = threading.Thread(target=self.check_ack, args=(max_ack, duplicated_ack))
+        check_ack = threading.Thread(target=self.check_ack, args=(max_ack, duplicated_ack, dup_ack_num))
         check_ack.start()
         # recv.join()
         while True:
@@ -319,12 +321,14 @@ class RDTSocket(UnreliableSocket):
                     continue
                 if window_list[k][0].SEQ == max_ack[0]:
                     ack_boundary = k
-                    if duplicated_ack[0] >= max_ack[0]:
+                    if duplicated_ack[0] == max_ack[0]:
                         self.sendto(window_list[k][0].to_bytes(), self.address)
                         window_list[k][1] = time.time()
                         if self.debug:
                             print('Fast Retransmit:', window_list[k][0])
-                        #快恢复，ssthresh砍半，window等于ssthresh，进入拥塞控制（向下取整）
+                        dup_ack_num[0] = 0
+                        duplicated_ack[0] = -1
+                        # 快恢复，ssthresh砍半，window等于ssthresh，进入拥塞控制（向下取整）
                         continue
 
                 if time.time() - window_list[k][1] >= self.time_out:
@@ -332,7 +336,7 @@ class RDTSocket(UnreliableSocket):
                     window_list[k][1] = datetime.now().timestamp()
                     if self.debug:
                         print('Timeout Retransmit:', window_list[k][0])
-                        #慢开始，window等于一，
+                        # 慢开始，window等于一，
 
             if len(window_list) > 0:
                 window_list = window_list[ack_boundary:]
@@ -344,8 +348,7 @@ class RDTSocket(UnreliableSocket):
                 _async_raise(check_ack.ident, SystemExit)
                 break
 
-    def check_ack(self, max_ack, duplicated_ack):
-        dup_ack_num = 0
+    def check_ack(self, max_ack, duplicated_ack, dup_ack_num):
         while True:
             packet = Packet.from_bytes(self.recvfrom(self.buffer_size)[0])
             if self.debug:
@@ -353,18 +356,16 @@ class RDTSocket(UnreliableSocket):
             if packet.test_the_packet(ACK=1):
                 if max_ack[0] < packet.SEQ_ACK:
                     max_ack[0] = packet.SEQ_ACK
-                    dup_ack_num = 0
+                    dup_ack_num[0] = 0
                 elif max_ack[0] == packet.SEQ_ACK:
-                    dup_ack_num += 1
-                #如果是慢开始，window的size加一
-            if dup_ack_num >= 3:
+                    dup_ack_num[0] += 1
+                # 如果是慢开始，window的size加一
+            if dup_ack_num[0] >= 3:
                 duplicated_ack[0] = max_ack[0]
-                dup_ack_num = 0
 
     def recv_many(self, list):
         while True:
-            p = Packet.from_bytes(self.recvfrom(self.buffer_size)[0])
-            list.append(p)
+            list.append(Packet.from_bytes(self.recvfrom(self.buffer_size)[0]))
 
     def recv_syn(self, list):  # 加上了地址
         while True:
