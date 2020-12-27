@@ -15,7 +15,7 @@ def addr_to_bytes(addr):
 
 
 class Server(ThreadingUDPServer):
-    def __init__(self, addr, rate=10240, delay=None):
+    def __init__(self, addr, rate=None, delay=None):
         super().__init__(addr, None)
         self.rate = rate
         self.buffer = 0
@@ -42,6 +42,7 @@ class Server(ThreadingUDPServer):
         with lock:
             if self.rate: time.sleep(len(data) / self.rate)
             self.buffer -= len(data)
+<<<<<<< HEAD
             loss_rate = 0.1
             if random.random() < loss_rate:
                 return
@@ -53,6 +54,15 @@ class Server(ThreadingUDPServer):
             for i in range(len(data) - 1):
                 if random.random() < corrupt_rate:
                     data[i] = data[:i] + (data[i] + 1).to_bytes(1, 'big') + data[i + 1:]
+=======
+            # loss_rate=0.1
+            # if random.random() < loss_rate:
+            #     return
+            # corrupt_rate = 0.1
+            # if random.random() < corrupt_rate:
+            #     i = len(data)-1
+            #     data = data[:i] + (data[i] + 1).to_bytes(1, 'big') + data[i+1:]
+>>>>>>> parent of 1a0e3cd... 当前最好版本，拥塞控制被注释
             """
             blockingly process each request
             you can add random loss/corrupt here
