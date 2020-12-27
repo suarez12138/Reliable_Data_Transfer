@@ -75,18 +75,9 @@ class Packet:
         return packet
 
     def test_the_packet(self, END=0, SYN=0, FIN=0, ACK=0):
-
-        if not self.END == END:
+        if not self.END == END or not self.SYN == SYN or not self.FIN == FIN or not self.ACK == ACK:
             return False
-        if not self.SYN == SYN:
-            return False
-        if not self.FIN == FIN:
-            return False
-        if not self.ACK == ACK:
-            return False
-        if not self.LEN == len(self.PAYLOAD):
-            return False
-        if not self.checksum(self.to_bytes()) == 0:
+        if not self.LEN == len(self.PAYLOAD) or not self.checksum(self.to_bytes()) == 0:
             return False
         return True
 
@@ -96,7 +87,6 @@ class Packet:
         sum = 0
         for i in range(0, int(length / 2)):
             b = int.from_bytes(data[0: 2], byteorder='big')
-            # print(hex(data[0]), hex(data[1]))
             data = data[2:]
             sum = (sum + b) % 65536
         return (65536 - sum) % 65536
