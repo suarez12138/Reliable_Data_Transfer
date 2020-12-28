@@ -69,9 +69,6 @@ class Packet:
         elif completed == 1:
             packet.PAYLOAD = packet.PAYLOAD[:-3]
 
-        ###########################################################################3需要修改
-        # assert packet.LEN == len(packet.PAYLOAD)
-        # assert Packet.checksum(packet.to_bytes()) == 0
         return packet
 
     def test_the_packet(self, END=0, SYN=0, FIN=0, ACK=0):

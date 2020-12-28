@@ -1,4 +1,4 @@
-from rdt import RDTSocket
+from rdt_阻塞版 import RDTSocket
 import time
 
 if __name__=='__main__':

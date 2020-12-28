@@ -34,6 +34,7 @@ class Server(ThreadingUDPServer):
             self.buffer += len(request[0])
             return True
         else:
+            print('full buffer')
             return False
 
     def finish_request(self, request, client_address):
@@ -42,17 +43,13 @@ class Server(ThreadingUDPServer):
         with lock:
             if self.rate: time.sleep(len(data) / self.rate)
             self.buffer -= len(data)
-            loss_rate = 0.1
-            if random.random() < loss_rate:
-                return
-            corrupt_rate = 0.00001
-            # if random.random() < corrupt_rate:
-            #     i = len(data)-1
-            #     data = data[:i] + (data[i] + 1).to_bytes(1, 'big') + data[i+1:]
-
-            for i in range(len(data) - 1):
-                if random.random() < corrupt_rate:
-                    data[i] = data[:i] + (data[i] + 1).to_bytes(1, 'big') + data[i + 1:]
+            # loss_rate = 0.1
+            # if random.random() < loss_rate:
+            #     return
+            # corrupt_rate = 0.00001
+            # for i in range(len(data) - 1):
+            #     if random.random() < corrupt_rate:
+            #         data = data[:i] + (data[i] + 1).to_bytes(1, 'big') + data[i + 1:]
             """
             blockingly process each request
             you can add random loss/corrupt here
